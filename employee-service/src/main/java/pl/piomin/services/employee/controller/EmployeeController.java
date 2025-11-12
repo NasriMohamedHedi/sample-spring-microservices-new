@@ -25,6 +25,12 @@ public class EmployeeController {
 	@PostMapping("/")
 	public Employee add(@RequestBody Employee employee) {
 		LOGGER.info("Employee add: {}", employee);
+
+		 // ❌ Hardcoded secret (intentional for testing SonarLint)
+    String password = "MySecretPassword123"; 
+    System.out.println("Debug password: " + password);
+	String api_token = "ghp_FAKESECRETKEY123456789";
+
 		return repository.add(employee);
 	}
 	
