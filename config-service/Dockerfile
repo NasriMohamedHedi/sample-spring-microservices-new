@@ -1,19 +1,29 @@
-# Use a supported OpenJDK 8 image
-FROM eclipse-temurin:8-jre-alpine
+# Intentional insecure Dockerfile for testing scanners
+# Bad: deprecated base image (alpine openjdk), remote ADD, hard-coded secret, runs as root, exposes SSH port, overly-permissive chmod
 
-# Set environment variables
-ENV APP_FILE=config-service-1.0-SNAPSHOT.jar
-ENV APP_HOME=/app
+FROM openjdk:8-jre-alpine
 
-# Expose the application port
-EXPOSE 8088
+LABEL maintainer="dev@HACKME.PLZ"
 
-# Copy the jar file into the container
-COPY target/$APP_FILE $APP_HOME/
+# Hardcoded secret — gitleaks will detect this
+ENV GITHUB_TOKEN=ghp_TSDHKJBKNLK5SG5SG
 
-# Set the working directory
-WORKDIR $APP_HOME
+# Bad: downloading app from remote URL (ADD remote URL) — flagged by config scanners
+ADD https://BEST.com/releases/config-service-latest.jar /app/config-service.jar
 
-# Run the jar
+# Create app dir and give insecure permissions (chmod 777)
+RUN mkdir -p /app && chmod 777 /app
+
+# Bad: expose SSH port (unnecessary) and app port
+EXPOSE 22 8088
+
+# Bad: keep default root user (no USER directive) — many scanners flag running as root
+WORKDIR /app
+
+# Copying something from build context (if present)
+COPY target/config-service-1.0-SNAPSHOT.jar /app/
+
+# Bad: no HEALTHCHECK, no non-root user, and using a shell wrapper that can hide PID
 ENTRYPOINT ["sh", "-c"]
-CMD ["exec java -jar $APP_FILE"]
+CMD ["exec java -jar /app/config-service-1.0-SNAPSHOT.jar"]
+

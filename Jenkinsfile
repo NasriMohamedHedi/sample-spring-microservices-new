@@ -45,7 +45,7 @@ pipeline {
 
         stage('SCA: Trivy Filesystem Scan') {
             steps {
-                sh 'trivy fs --security-checks vuln --exit-code 1 . || true'
+                sh 'trivy fs --security-checks vuln --exit-code 0 --format table . || true'
                 sh 'trivy fs --security-checks vuln --format json -o trivy-filesystem-report.json . || true'
             }
         }
@@ -56,28 +56,15 @@ pipeline {
             }
         }
 
-        stage('Docker Build All Services') {
+        stage('Dockerfile Scan (No Image Build)') {
             steps {
+                echo "🔍 Scanning Dockerfiles for misconfigurations..."
                 sh '''
-                    docker build -t config-service:latest ./config-service
-                    docker build -t discovery-service:latest ./discovery-service
-                    docker build -t employee-service:latest ./employee-service
-                    docker build -t department-service:latest ./department-service
-                    docker build -t organization-service:latest ./organization-service
-                    docker build -t gateway-service:latest ./gateway-service
-                '''
-            }
-        }
-
-        stage('Docker Image Scan: Trivy') {
-            steps {
-                sh '''
-                    trivy image --security-checks vuln --exit-code 1 config-service:latest || true
-                    trivy image --security-checks vuln --exit-code 1 discovery-service:latest || true
-                    trivy image --security-checks vuln --exit-code 1 employee-service:latest || true
-                    trivy image --security-checks vuln --exit-code 1 department-service:latest || true
-                    trivy image --security-checks vuln --exit-code 1 organization-service:latest || true
-                    trivy image --security-checks vuln --exit-code 1 gateway-service:latest || true
+                    # Scan all Dockerfiles across services
+                    find . -type f -iname "Dockerfile" | while read file; do
+                        echo "Scanning $file ..."
+                        trivy config --exit-code 0 --format table --output "trivy-config-$(basename $(dirname $file)).txt" "$(dirname $file)" || true
+                    done
                 '''
             }
         }
@@ -85,8 +72,8 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: 'target/**, trivy-filesystem-report.json, gitleaks-report.json', onlyIfSuccessful: false
-            echo "Pipeline finished. Check SonarQube dashboard and archived reports."
+            archiveArtifacts artifacts: '**/target/**, *.json, *.txt', onlyIfSuccessful: false
+            echo "📦 Pipeline finished. Check SonarQube dashboard and archived reports."
         }
         success {
             echo '✅ Build and all scans completed successfully.'
