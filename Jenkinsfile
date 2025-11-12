@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        SONAR_HOST = "http://192.168.186.157:9000"
-        IMAGE_NAME_PREFIX = "microservice"
+        SONAR_HOST = "http://localhost:9000"
+        SONAR_TOKEN = credentials('Jenkins-Token')
         TRIVY_FS_REPORT = "trivy-fs-report.txt"
         TRIVY_IMAGE_REPORT = "trivy-image-report.txt"
         GITLEAKS_REPORT = "gitleaks-report.json"
@@ -15,14 +15,16 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/NasriMohamedHedi/sample-spring-microservices-new.git'
             }
         }
 
-        stage('Build All Services') {
+        stage('Build All Modules') {
             steps {
+                // Build all modules, skip tests to save time
                 sh 'mvn -B clean package -DskipTests'
             }
         }
@@ -32,21 +34,21 @@ pipeline {
                 sh 'mvn -B test || true'
             }
             post {
-                always { junit '**/target/surefire-reports/*.xml' }
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                }
             }
         }
 
         stage('SAST: SonarQube Analysis') {
-            environment {
-                SONAR_TOKEN = credentials('sonar-token') // your Jenkins secret text ID
-            }
             steps {
+                // Maven will automatically detect binaries for all modules
                 sh """
-                    mvn -B sonar:sonar \
-                        -Dsonar.projectKey=sample-spring-microservices \
-                        -Dsonar.host.url=${SONAR_HOST} \
-                        -Dsonar.login=${SONAR_TOKEN} \
-                        -Dsonar.java.binaries=**/target/classes
+                    mvn clean verify sonar:sonar \
+                      -Dsonar.projectKey=sample-spring-microservices \
+                      -Dsonar.projectName='sample-spring-microservices' \
+                      -Dsonar.host.url=${SONAR_HOST} \
+                      -Dsonar.token=${SONAR_TOKEN}
                 """
             }
         }
@@ -55,7 +57,7 @@ pipeline {
             steps {
                 sh """
                     docker run --rm -v "${WORKSPACE}":/project aquasecurity/trivy:latest fs \
-                        --exit-code 1 --severity HIGH,CRITICAL /project > ${TRIVY_FS_REPORT} || true
+                    --exit-code 1 --severity HIGH,CRITICAL /project > ${TRIVY_FS_REPORT} || true
                 """
             }
             post {
@@ -69,7 +71,7 @@ pipeline {
             steps {
                 sh """
                     docker run --rm -v "${WORKSPACE}":/src zricethezav/gitleaks:latest detect \
-                        --source /src --report-format json --report-path /src/${GITLEAKS_REPORT} --no-git || true
+                    --source /src --report-format json --report-path /src/${GITLEAKS_REPORT} --no-git || true
                 """
             }
             post {
@@ -81,12 +83,11 @@ pipeline {
 
         stage('Docker Build All Services') {
             steps {
+                // Loop through services and build docker images
                 script {
-                    // iterate over each service folder
                     def services = ['discovery-service','config-service','employee-service','department-service','organization-service','gateway-service']
-                    services.each { svc ->
-                        def imageName = "${IMAGE_NAME_PREFIX}-${svc}:${env.BUILD_NUMBER}"
-                        sh "docker build -t ${imageName} ${svc}"
+                    for (s in services) {
+                        sh "docker build -t ${s}:ci-${env.BUILD_NUMBER} ./${s}"
                     }
                 }
             }
@@ -96,14 +97,13 @@ pipeline {
             steps {
                 script {
                     def services = ['discovery-service','config-service','employee-service','department-service','organization-service','gateway-service']
-                    services.each { svc ->
-                        def imageName = "${IMAGE_NAME_PREFIX}-${svc}:${env.BUILD_NUMBER}"
+                    for (s in services) {
                         sh """
                             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-                                -v "${WORKSPACE}":/workdir aquasecurity/trivy:latest image \
-                                --exit-code 1 --severity HIGH,CRITICAL ${imageName} > ${TRIVY_IMAGE_REPORT}-${svc} || true
+                            -v "${WORKSPACE}":/workdir aquasecurity/trivy:latest image \
+                            --exit-code 1 --severity HIGH,CRITICAL ${s}:ci-${env.BUILD_NUMBER} > ${TRIVY_IMAGE_REPORT} || true
                         """
-                        archiveArtifacts artifacts: "${TRIVY_IMAGE_REPORT}-${svc}", onlyIfSuccessful: false
+                        archiveArtifacts artifacts: "${TRIVY_IMAGE_REPORT}", onlyIfSuccessful: false
                     }
                 }
             }
@@ -112,11 +112,11 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: '**/target/**, **/*.txt, **/*.json', onlyIfSuccessful: false
+            archiveArtifacts artifacts: 'target/**, **/*.txt, **/*.json', onlyIfSuccessful: false
             echo "Pipeline finished. Check SonarQube dashboard and archived reports."
         }
         failure {
-            mail to: 'nasrimohamedhedi0@gmail.com', subject: "Jenkins build failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}", body: "Check Jenkins console and archived artifacts."
+            echo '❌ Build failed — check console and archived reports.'
         }
     }
 }
