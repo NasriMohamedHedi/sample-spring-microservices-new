@@ -72,34 +72,34 @@ pipeline {
     }
 
     post {
-        always {
-            archiveArtifacts artifacts: 'target/**, trivy-filesystem-report.json, gitleaks-report.json, trivy-config-*.txt', onlyIfSuccessful: false
-            echo "Pipeline finished. Check SonarQube dashboard and archived reports."
-        }
+    always {
+        archiveArtifacts artifacts: 'target/**, trivy-filesystem-report.json, gitleaks-report.json, trivy-config-*.txt', onlyIfSuccessful: false
+        echo "Pipeline finished. Check SonarQube dashboard and archived reports."
+    }
 
-        success {
-            echo '✅ Build and all scans completed successfully.'
+    success {
+        echo '✅ Build and all scans completed successfully.'
 
-            emailext(
-                subject: "✅ Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: """
-                    Hello,
+        emailext(
+            subject: "✅ Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            body: """
+                Hello,
 
-                    The Jenkins pipeline *${env.JOB_NAME}* build #${env.BUILD_NUMBER} completed successfully.
+                The Jenkins pipeline *${env.JOB_NAME}* build #${env.BUILD_NUMBER} completed successfully.
 
-                    Artifacts and reports are attached.
+                Artifacts and reports are attached.
 
-                    Regards,
-                    Jenkins DevSecOps Pipeline
-                """,
-                to: "nasrimohamedhedi0@gmail.com",
-                attachPatterns: "target/*.jar, trivy-filesystem-report.json, gitleaks-report.json, trivy-config-*.txt"
-            )
-        }
+                Regards,
+                Jenkins DevSecOps Pipeline
+            """,
+            to: "nasrimohamedhedi0@gmail.com",
+            attachmentsPattern: "target/*.jar, trivy-filesystem-report.json, gitleaks-report.json, trivy-config-*.txt"
+        )
+    }
 
-        failure {
-            echo '❌ Build failed — check console and archived reports.'
-        }
+    failure {
+        echo '❌ Build failed — check console and archived reports.'
     }
 }
+
 
