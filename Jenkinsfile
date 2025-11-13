@@ -71,7 +71,7 @@ pipeline {
         }
     }
 
-    post {
+post {
     always {
         archiveArtifacts artifacts: 'target/**, trivy-filesystem-report.json, gitleaks-report.json, trivy-config-*.txt', onlyIfSuccessful: false
         echo "Pipeline finished. Check SonarQube dashboard and archived reports."
@@ -100,6 +100,7 @@ pipeline {
     failure {
         echo '❌ Build failed — check console and archived reports.'
     }
+}
 }
 
 
