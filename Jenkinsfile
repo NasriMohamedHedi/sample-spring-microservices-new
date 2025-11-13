@@ -8,7 +8,9 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/NasriMohamedHedi/sample-spring-microservices-new.git', credentialsId: 'github-pat'
+                git branch: 'main', 
+                    url: 'https://github.com/NasriMohamedHedi/sample-spring-microservices-new.git', 
+                    credentialsId: 'github-pat'
             }
         }
 
@@ -45,8 +47,7 @@ pipeline {
 
         stage('SCA: Trivy Filesystem Scan') {
             steps {
-                sh 'trivy fs --security-checks vuln --exit-code 0 --format table . || true'
-                sh 'trivy fs --security-checks vuln --format json -o trivy-filesystem-report.json . || true'
+                sh 'trivy fs --scanners vuln --format json -o trivy-filesystem-report.json . || true'
             }
         }
 
@@ -56,14 +57,14 @@ pipeline {
             }
         }
 
-        stage('Dockerfile Scan (No Image Build)') {
+        stage('Dockerfile Scan: Trivy Config') {
             steps {
-                echo "🔍 Scanning Dockerfiles for misconfigurations..."
                 sh '''
-                    # Scan all Dockerfiles across services
-                    find . -type f -iname "Dockerfile" | while read file; do
+                    find . -type f -iname Dockerfile | while read file; do
                         echo "Scanning $file ..."
-                        trivy config --exit-code 0 --format table --output "trivy-config-$(basename $(dirname $file)).txt" "$(dirname $file)" || true
+                        dir=$(dirname "$file")
+                        name=$(basename "$dir")
+                        trivy config --exit-code 0 --format table --output trivy-config-$name.txt "$dir"
                     done
                 '''
             }
@@ -72,12 +73,30 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: '**/target/**, *.json, *.txt', onlyIfSuccessful: false
-            echo "📦 Pipeline finished. Check SonarQube dashboard and archived reports."
+            archiveArtifacts artifacts: 'target/**, trivy-filesystem-report.json, gitleaks-report.json, trivy-config-*.txt', onlyIfSuccessful: false
+            echo "Pipeline finished. Check SonarQube dashboard and archived reports."
         }
+
         success {
             echo '✅ Build and all scans completed successfully.'
+
+            emailext(
+                subject: "✅ Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    Hello,
+
+                    The Jenkins pipeline *${env.JOB_NAME}* build #${env.BUILD_NUMBER} completed successfully.
+
+                    Artifacts and reports are attached.
+
+                    Regards,
+                    Jenkins DevSecOps Pipeline
+                """,
+                to: "nasrimohamedhedi0@gmail.com",
+                attachPatterns: "target/*.jar, trivy-filesystem-report.json, gitleaks-report.json, trivy-config-*.txt"
+            )
         }
+
         failure {
             echo '❌ Build failed — check console and archived reports.'
         }
