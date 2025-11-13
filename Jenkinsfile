@@ -92,7 +92,7 @@ post {
                 Regards,
                 Jenkins DevSecOps Pipeline
             """,
-            to: "nasrimohamedhedi0@gmail.com",
+            to: "mohamedhedi.nasri@esprit.tn",
             attachmentsPattern: "target/*.jar, trivy-filesystem-report.json, gitleaks-report.json, trivy-config-*.txt"
         )
     }
